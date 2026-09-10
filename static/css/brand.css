@@ -11,11 +11,12 @@
 }
 
 .menu-button {
+  background-color: transparent !important;
   background-image: url("../img/sidebar-menu-button.png") !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
-  background-size: 16px 16px !important;
-  image-rendering: pixelated;
+  background-size: 24px 24px !important;
+  image-rendering: auto;
 }
 
 .menu-button > span {
