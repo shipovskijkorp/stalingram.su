@@ -22,6 +22,7 @@ const attachmentTray = document.getElementById("attachmentTray");
 const messageFlow = document.getElementById("messageFlow");
 const messageStage = document.getElementById("messageStage");
 const sendButton = document.getElementById("sendButton");
+const enterToSend = document.body.dataset.enterToSend !== "false";
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} Б`;
@@ -52,7 +53,15 @@ function autoSizeInput() {
 
 messageInput?.addEventListener("input", autoSizeInput);
 messageInput?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key !== "Enter") return;
+
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
+    event.preventDefault();
+    form?.requestSubmit();
+    return;
+  }
+
+  if (enterToSend && !event.shiftKey) {
     event.preventDefault();
     form?.requestSubmit();
   }

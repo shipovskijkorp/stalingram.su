@@ -8,6 +8,7 @@ from .views import (
     public_profile,
     register,
     remove_avatar,
+    settings_view,
 )
 
 app_name = "accounts"
@@ -17,6 +18,7 @@ urlpatterns = [
     path("register/", register, name="register"),
     path("logout/", StalingramLogoutView.as_view(), name="logout"),
     path("profile/", profile, name="profile"),
+    path("settings/", settings_view, name="settings"),
     path("profile/avatar/remove/", remove_avatar, name="remove_avatar"),
     path(
         "profile/password/",

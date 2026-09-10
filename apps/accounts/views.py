@@ -7,7 +7,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 
-from .forms import IdentifierAuthenticationForm, ProfileForm, RegisterForm
+from .forms import (
+    IdentifierAuthenticationForm,
+    ProfileForm,
+    RegisterForm,
+    UserSettingsForm,
+)
 from .models import User
 
 
@@ -59,6 +64,16 @@ def profile(request):
         return redirect("accounts:profile")
 
     return render(request, "accounts/profile.html", {"form": form})
+
+
+@login_required
+def settings_view(request):
+    form = UserSettingsForm(request.POST or None, instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Настройки сохранены.")
+        return redirect("accounts:settings")
+    return render(request, "accounts/settings.html", {"form": form})
 
 
 @login_required

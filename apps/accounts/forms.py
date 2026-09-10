@@ -157,3 +157,19 @@ class ProfileForm(forms.ModelForm):
         if content_type and content_type not in allowed_types:
             raise forms.ValidationError("Поддерживаются только PNG, JPEG и WebP.")
         return avatar
+
+
+class UserSettingsForm(forms.ModelForm):
+    theme = forms.ChoiceField(
+        label="Тема оформления",
+        choices=User.Theme.choices,
+        widget=forms.RadioSelect,
+    )
+    enter_to_send = forms.BooleanField(
+        label="Отправлять сообщения по Enter",
+        required=False,
+    )
+
+    class Meta:
+        model = User
+        fields = ("theme", "enter_to_send")

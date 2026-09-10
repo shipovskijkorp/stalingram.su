@@ -25,6 +25,7 @@
 
     <nav class="settings-nav" aria-label="Настройки">
       <a class="is-active" href="{% url 'accounts:profile' %}"><span>●</span> Профиль</a>
+      <a href="{% url 'accounts:settings' %}"><span>⚙</span> Настройки</a>
       <a href="{% url 'accounts:public_profile' request.user.username %}"><span>↗</span> Публичная страница</a>
       <a href="{% url 'accounts:password_change' %}"><span>⌁</span> Пароль</a>
       <a href="{% url 'messenger:home' %}"><span>←</span> Вернуться к чатам</a>

@@ -183,6 +183,7 @@
     <a href="{% url 'messenger:contacts' %}"><span>◎</span><strong>Контакты</strong></a>
     <a href="{% url 'accounts:profile' %}"><span>●</span><strong>Мой профиль</strong></a>
     <a href="{% url 'accounts:public_profile' request.user.username %}"><span>↗</span><strong>Публичная страница</strong></a>
+    <a href="{% url 'accounts:settings' %}"><span>⚙</span><strong>Настройки</strong></a>
     <a href="{% url 'accounts:password_change' %}"><span>⌁</span><strong>Сменить пароль</strong></a>
   </nav>
 

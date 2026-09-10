@@ -3,6 +3,10 @@ from django.db import models
 
 
 class User(AbstractUser):
+    class Theme(models.TextChoices):
+        LIGHT = "light", "Светлая"
+        DARK = "dark", "Тёмная"
+
     email = models.EmailField("электронная почта", unique=True)
     bio = models.CharField("о себе", max_length=160, blank=True, default="")
     avatar = models.ImageField(
@@ -11,6 +15,13 @@ class User(AbstractUser):
         blank=True,
         default="",
     )
+    theme = models.CharField(
+        "тема оформления",
+        max_length=10,
+        choices=Theme.choices,
+        default=Theme.LIGHT,
+    )
+    enter_to_send = models.BooleanField("отправка по Enter", default=True)
 
     @property
     def display_name(self):

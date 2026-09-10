@@ -48,3 +48,40 @@ class AccountFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Эта почта уже используется.")
+
+
+class UserSettingsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            "settings_user",
+            "settings@example.com",
+            "Stalingram-test-1945",
+        )
+        self.client.force_login(self.user)
+
+    def test_settings_page_requires_login(self):
+        self.client.logout()
+        response = self.client.get(reverse("accounts:settings"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response.url)
+
+    def test_theme_and_enter_preference_are_saved(self):
+        response = self.client.post(
+            reverse("accounts:settings"),
+            {"theme": "dark"},
+        )
+        self.assertRedirects(response, reverse("accounts:settings"))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.theme, User.Theme.DARK)
+        self.assertFalse(self.user.enter_to_send)
+
+    def test_enter_to_send_can_be_enabled(self):
+        self.user.enter_to_send = False
+        self.user.save(update_fields=["enter_to_send"])
+        response = self.client.post(
+            reverse("accounts:settings"),
+            {"theme": "light", "enter_to_send": "on"},
+        )
+        self.assertRedirects(response, reverse("accounts:settings"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.enter_to_send)

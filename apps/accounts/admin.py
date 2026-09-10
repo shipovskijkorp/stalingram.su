@@ -8,4 +8,5 @@ from .models import User
 class StalingramUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         ("Профиль Stalingram", {"fields": ("bio", "avatar")}),
+        ("Настройки Stalingram", {"fields": ("theme", "enter_to_send")}),
     )

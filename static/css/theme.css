@@ -1,0 +1,124 @@
+body[data-theme="dark"] {
+  --panel: #1c1917;
+  --panel-strong: #211d1a;
+  --ink: #eee5d8;
+  --muted: #a99987;
+  --line: rgba(236, 218, 194, .11);
+  --red: #b53a44;
+  --red-dark: #d45a63;
+  --red-soft: #c44e58;
+  --gold: #d6aa45;
+  --shadow: 0 18px 60px rgba(0, 0, 0, .34);
+  color-scheme: dark;
+  color: var(--ink);
+  background: #141210;
+}
+body[data-theme="dark"].app-body,
+body[data-theme="dark"].profile-body,
+body[data-theme="dark"].contacts-body { background: #141210; }
+body[data-theme="dark"] .flash { border-color: rgba(255,255,255,.08); background: #2a2420; color: #eadfce; box-shadow: 0 10px 32px rgba(0,0,0,.28); }
+body[data-theme="dark"] .app-shell { background: var(--panel); border-color: rgba(255,255,255,.06); }
+body[data-theme="dark"] .sidebar { background: #1c1917; border-color: var(--line); }
+body[data-theme="dark"] .sidebar__topbar { background: linear-gradient(180deg, #8d252d, #68171d); }
+body[data-theme="dark"] .search,
+body[data-theme="dark"] .people-search { background: #29231f; border-color: rgba(255,255,255,.07); color: #a99987; }
+body[data-theme="dark"] .search input,
+body[data-theme="dark"] .people-search input,
+body[data-theme="dark"] .composer textarea { color: var(--ink); }
+body[data-theme="dark"] .chat-row { border-color: rgba(255,255,255,.045); }
+body[data-theme="dark"] .chat-row:hover { background: rgba(181,58,68,.08); }
+body[data-theme="dark"] .chat-row.is-active { background: linear-gradient(90deg, rgba(181,58,68,.2), rgba(181,58,68,.07)); }
+body[data-theme="dark"] .chat-row__headline time,
+body[data-theme="dark"] .chat-row__meta,
+body[data-theme="dark"] .chat-row__preview,
+body[data-theme="dark"] .chat-filter-empty,
+body[data-theme="dark"] .sidebar-footer-link,
+body[data-theme="dark"] .account-mini__name { color: #a69582; }
+body[data-theme="dark"] .sidebar__footer { border-color: var(--line); color: #9f8e7b; background: #191614; }
+body[data-theme="dark"] .conversation,
+body[data-theme="dark"] .message-stage { background: #171412; }
+body[data-theme="dark"] .wallpaper { opacity: .11; filter: invert(.84) sepia(.18); }
+body[data-theme="dark"] .conversation-empty,
+body[data-theme="dark"] .dialog-start { border-color: rgba(255,255,255,.07); background: rgba(39,34,30,.92); box-shadow: 0 10px 34px rgba(0,0,0,.18); }
+body[data-theme="dark"] .conversation-empty p,
+body[data-theme="dark"] .conversation-empty small,
+body[data-theme="dark"] .dialog-start small,
+body[data-theme="dark"] .dialog-start p { color: #a79683; }
+body[data-theme="dark"] .conversation-header { border-color: var(--line); background: rgba(31,27,24,.96); }
+body[data-theme="dark"] .conversation-header__text small,
+body[data-theme="dark"] .conversation-header__profile,
+body[data-theme="dark"] .mobile-back { color: #ad9c89; }
+body[data-theme="dark"] .message--incoming { border-color: rgba(255,255,255,.06); background: #28231f; }
+body[data-theme="dark"] .message--outgoing { border-color: rgba(181,58,68,.18); background: #4a2829; }
+body[data-theme="dark"] .message footer { color: #9b8a78; }
+body[data-theme="dark"] .message--outgoing footer { color: #c08f8f; }
+body[data-theme="dark"] .message-media__image,
+body[data-theme="dark"] .message-media__video { background: rgba(0,0,0,.2); }
+body[data-theme="dark"] .message-media__audio,
+body[data-theme="dark"] .message-media__file { background: rgba(255,255,255,.055); }
+body[data-theme="dark"] .message-media__audio span { color: #d2c3b2; }
+body[data-theme="dark"] .composer { border-color: var(--line); background: #1e1a17; }
+body[data-theme="dark"] .composer__field { border-color: rgba(255,255,255,.08); background: #2a2420; }
+body[data-theme="dark"] .composer__attach { color: #af9c87; }
+body[data-theme="dark"] .composer__attach:hover { background: #2c2621; }
+body[data-theme="dark"] .attachment-chip { background: #302923; color: #b9a894; }
+body[data-theme="dark"] .contacts-card,
+body[data-theme="dark"] .people-list { border-color: rgba(255,255,255,.07); background: #211d1a; box-shadow: var(--shadow); }
+body[data-theme="dark"] .contacts-topbar,
+body[data-theme="dark"] .people-section + .people-section,
+body[data-theme="dark"] .person-row + .person-row { border-color: var(--line); }
+body[data-theme="dark"] .contacts-topbar small,
+body[data-theme="dark"] .people-section__title,
+body[data-theme="dark"] .person-row__identity small,
+body[data-theme="dark"] .people-empty { color: #aa9985; }
+body[data-theme="dark"] .people-section__title span { background: #302923; color: #b09e89; }
+body[data-theme="dark"] .person-action { border-color: rgba(255,255,255,.08); background: #302923; color: #d9cbbb; }
+body[data-theme="dark"] .person-action--primary { border-color: var(--red); background: var(--red); color: #fff; }
+body[data-theme="dark"] .profile-drawer { background: #1d1916; box-shadow: 14px 0 48px rgba(0,0,0,.4); }
+body[data-theme="dark"] .profile-drawer__nav a { color: #e2d6c8; }
+body[data-theme="dark"] .profile-drawer__nav a:hover { background: #2a2420; }
+body[data-theme="dark"] .profile-drawer__footer { border-color: var(--line); }
+body[data-theme="dark"] .profile-drawer__footer small { color: #8f7f6e; }
+body[data-theme="dark"] .settings-shell { background: #181513; box-shadow: 0 0 46px rgba(0,0,0,.28); }
+body[data-theme="dark"] .settings-sidebar { border-color: var(--line); background: #1d1916; }
+body[data-theme="dark"] .settings-brand { color: #e17b82; }
+body[data-theme="dark"] .settings-user { background: #29231f; }
+body[data-theme="dark"] .settings-user strong { color: #eee5d8; }
+body[data-theme="dark"] .settings-user span,
+body[data-theme="dark"] .profile-hero-card__text small { color: #a69582; }
+body[data-theme="dark"] .settings-nav a { color: #cfc1b1; }
+body[data-theme="dark"] .settings-nav a:hover { background: #29231f; }
+body[data-theme="dark"] .settings-nav a.is-active { background: rgba(181,58,68,.15); color: #dd6b73; }
+body[data-theme="dark"] .settings-card { border-color: rgba(255,255,255,.07); background: #211d1a; box-shadow: 0 6px 24px rgba(0,0,0,.12); }
+body[data-theme="dark"] .settings-card__heading h1,
+body[data-theme="dark"] .settings-card__heading h2 { color: #eee5d8; }
+body[data-theme="dark"] .settings-card__heading p,
+body[data-theme="dark"] .profile-field > small,
+body[data-theme="dark"] .settings-row-link small { color: #a2917e; }
+body[data-theme="dark"] .profile-field > span { color: #d4c6b6; }
+body[data-theme="dark"] .profile-field input,
+body[data-theme="dark"] .profile-field textarea,
+body[data-theme="dark"] .password-form input,
+body[data-theme="dark"] .username-input { border-color: rgba(255,255,255,.08); background: #2a2420; color: var(--ink); }
+body[data-theme="dark"] .profile-field input:focus,
+body[data-theme="dark"] .profile-field textarea:focus,
+body[data-theme="dark"] .password-form input:focus { background: #302923; }
+body[data-theme="dark"] .username-input input { background: transparent; }
+body[data-theme="dark"] .settings-row-link { color: #dfd3c5; }
+body[data-theme="dark"] .settings-row-link:hover { background: #2a2420; }
+body[data-theme="dark"] .secondary-button { border-color: rgba(255,255,255,.09); background: #29231f; color: #d4c6b6; }
+body[data-theme="dark"] .public-profile-topbar a { color: #d6c8b8; }
+body[data-theme="dark"] .public-profile-topbar a:hover { background: rgba(255,255,255,.05); }
+body[data-theme="dark"] .public-profile-card { border-color: rgba(255,255,255,.07); background: #211d1a; box-shadow: 0 12px 38px rgba(0,0,0,.22); }
+body[data-theme="dark"] .public-profile-section,
+body[data-theme="dark"] .public-profile-footer { border-color: var(--line); }
+body[data-theme="dark"] .public-profile-section p,
+body[data-theme="dark"] .public-profile-footer { color: #b09f8b; }
+body[data-theme="dark"] .theme-option { border-color: rgba(255,255,255,.08); background: #29231f; }
+body[data-theme="dark"] .theme-option:hover { border-color: rgba(221,107,115,.34); }
+body[data-theme="dark"] .theme-option.is-selected { border-color: rgba(221,107,115,.58); background: rgba(181,58,68,.13); }
+body[data-theme="dark"] .theme-option__text small,
+body[data-theme="dark"] .preference-row__copy small { color: #a69582; }
+body[data-theme="dark"] .theme-option__check { border-color: rgba(255,255,255,.14); }
+body[data-theme="dark"] .switch-control__track { background: #524940; }
+body[data-theme="dark"] .switch-control__thumb { background: #eee5d8; box-shadow: 0 2px 7px rgba(0,0,0,.4); }
