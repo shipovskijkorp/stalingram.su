@@ -73,9 +73,18 @@ def remove_avatar(request):
 
 
 def public_profile(request, username):
+    from apps.messenger.models import Contact
+
     profile_user = get_object_or_404(User, username__iexact=username, is_active=True)
+    is_contact = False
+    if request.user.is_authenticated and request.user.pk != profile_user.pk:
+        is_contact = Contact.objects.filter(owner=request.user, user=profile_user).exists()
+
     return render(
         request,
         "accounts/public_profile.html",
-        {"profile_user": profile_user},
+        {
+            "profile_user": profile_user,
+            "is_contact": is_contact,
+        },
     )

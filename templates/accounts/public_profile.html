@@ -1,12 +1,14 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ profile_user.display_name }} — Stalingram{% endblock %}
 {% block body_class %}profile-body{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/messenger.css' %}">{% endblock %}
 
 {% block content %}
 <main class="public-profile-shell">
   <header class="public-profile-topbar">
-    <a href="{% url 'messenger:home' %}" aria-label="Назад">←</a>
+    <a href="{% if request.user.is_authenticated %}{% url 'messenger:home' %}{% else %}{% url 'accounts:login' %}{% endif %}" aria-label="Назад">←</a>
     <strong>Профиль</strong>
     <span></span>
   </header>
@@ -26,6 +28,34 @@
       <div class="public-profile-title">
         <h1>{{ profile_user.display_name }}</h1>
         <p>@{{ profile_user.username }}</p>
+
+        <div class="public-profile-actions">
+          {% if request.user.is_authenticated %}
+            {% if request.user.pk == profile_user.pk %}
+              <a class="profile-action profile-action--primary" href="{% url 'accounts:profile' %}">Редактировать</a>
+            {% else %}
+              <form method="post" action="{% url 'messenger:start_chat' profile_user.username %}">
+                {% csrf_token %}
+                <button class="profile-action profile-action--primary" type="submit">Написать</button>
+              </form>
+              {% if is_contact %}
+                <form method="post" action="{% url 'messenger:remove_contact' profile_user.username %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button class="profile-action" type="submit">Удалить из контактов</button>
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'messenger:add_contact' profile_user.username %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button class="profile-action" type="submit">Добавить в контакты</button>
+                </form>
+              {% endif %}
+            {% endif %}
+          {% else %}
+            <a class="profile-action profile-action--primary" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Войти, чтобы написать</a>
+          {% endif %}
+        </div>
       </div>
 
       <button class="public-profile-copy" type="button" data-copy-profile data-profile-url="{% url 'accounts:public_profile' profile_user.username %}">Скопировать ссылку</button>
