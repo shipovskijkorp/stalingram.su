@@ -3,7 +3,10 @@
 
 {% block title %}{% if selected_chat %}{{ selected_chat.other_user.display_name }} — Stalingram{% else %}Stalingram{% endif %}{% endblock %}
 {% block body_class %}app-body{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/messenger.css' %}">{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/messenger.css' %}">
+<link rel="stylesheet" href="{% static 'css/media.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="app-shell{% if selected_chat %} chat-open{% endif %}">
@@ -109,26 +112,34 @@
 
           {% for message in chat_messages %}
             <article class="message{% if message.sender_id == request.user.pk %} message--outgoing{% else %} message--incoming{% endif %}" data-message-id="{{ message.pk }}">
-              {% if message.attachments.all %}
-                <div class="message-media">
-                  {% for attachment in message.attachments.all %}
-                    {% if attachment.kind == 'image' %}
-                      <a class="message-media__item" href="{{ attachment.file.url }}" target="_blank" rel="noopener">
-                        <img class="message-media__image" src="{{ attachment.file.url }}" alt="{{ attachment.original_name }}" loading="lazy">
-                      </a>
-                    {% elif attachment.kind == 'video' %}
-                      <video class="message-media__video" controls preload="metadata" src="{{ attachment.file.url }}"></video>
-                    {% elif attachment.kind == 'audio' %}
-                      <div class="message-media__audio">
-                        <span>{{ attachment.original_name }}</span>
-                        <audio controls preload="metadata" src="{{ attachment.file.url }}"></audio>
-                      </div>
-                    {% else %}
-                      <a class="message-media__file" href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name }}</a>
-                    {% endif %}
-                  {% endfor %}
-                </div>
-              {% endif %}
+              {% with attachment_count=message.attachments.all|length %}
+                {% if attachment_count %}
+                  <div class="message-media{% if attachment_count > 1 %} message-media--album{% endif %}" data-count="{{ attachment_count }}">
+                    {% for attachment in message.attachments.all %}
+                      {% if attachment.kind == 'image' %}
+                        <a class="message-media__item" href="{{ attachment.file.url }}" target="_blank" rel="noopener">
+                          <img class="message-media__image" src="{{ attachment.file.url }}" alt="{{ attachment.original_name }}" loading="lazy">
+                        </a>
+                      {% elif attachment.kind == 'video' %}
+                        <video class="message-media__video" controls preload="metadata" src="{{ attachment.file.url }}"></video>
+                      {% elif attachment.kind == 'audio' %}
+                        <div class="message-media__audio">
+                          <span>{{ attachment.original_name }}</span>
+                          <audio controls preload="metadata" src="{{ attachment.file.url }}"></audio>
+                        </div>
+                      {% else %}
+                        <a class="message-file-card" href="{{ attachment.file.url }}" target="_blank" rel="noopener">
+                          <span class="message-file-card__icon">↓</span>
+                          <span class="message-file-card__text">
+                            <strong>{{ attachment.original_name }}</strong>
+                            <small>{{ attachment.size|filesizeformat }}</small>
+                          </span>
+                        </a>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              {% endwith %}
               {% if message.text %}<p class="message__text">{{ message.text|linebreaksbr }}</p>{% endif %}
               <footer>
                 <time>{{ message.created_at|date:'H:i' }}</time>
@@ -141,14 +152,35 @@
 
       <form class="composer" id="messageForm" method="post" action="{% url 'messenger:send_message' selected_chat.pk %}" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="attachment-tray" id="attachmentTray" hidden></div>
-        <label class="composer__attach" for="attachmentsInput" title="Прикрепить медиа">＋</label>
-        <input id="attachmentsInput" class="visually-hidden" type="file" name="attachments" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac">
+        <div class="attachment-control" id="attachmentControl">
+          <button class="composer__attach composer__attach-button" id="attachmentButton" type="button" aria-label="Прикрепить" aria-expanded="false" aria-controls="attachmentMenu" title="Прикрепить">＋</button>
+          <div class="attachment-menu" id="attachmentMenu" role="menu" hidden>
+            <button type="button" role="menuitem" data-attachment-mode="media">
+              <span class="attachment-menu__icon">▧</span>
+              <span><strong>Фото или видео</strong><small>Предпросмотр и отправка альбомом</small></span>
+            </button>
+            <button type="button" role="menuitem" data-attachment-mode="file">
+              <span class="attachment-menu__icon">⌑</span>
+              <span><strong>Без сжатия</strong><small>Отправить исходный файл</small></span>
+            </button>
+          </div>
+        </div>
+        <input id="mediaAttachmentsInput" class="visually-hidden" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-m4v">
+        <input id="fileAttachmentsInput" class="visually-hidden" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-m4v,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac">
+        <input id="attachmentModeInput" type="hidden" name="attachment_mode" value="media">
         <div class="composer__field">
           <textarea id="messageInput" name="text" rows="1" maxlength="4096" placeholder="Сообщение" autocomplete="off"></textarea>
         </div>
         <button class="send-button" id="sendButton" type="submit" aria-label="Отправить">➤</button>
       </form>
+
+      <div class="chat-drop-overlay" id="chatDropOverlay" hidden aria-hidden="true">
+        <div>
+          <span>＋</span>
+          <strong>Отправить файлы</strong>
+          <small>Перетащите сюда фото или видео</small>
+        </div>
+      </div>
     </main>
   {% else %}
     <main class="conversation conversation--empty">
@@ -163,6 +195,47 @@
     </main>
   {% endif %}
 </div>
+
+{% if selected_chat %}
+<div class="media-compose-backdrop" id="mediaComposeBackdrop" hidden>
+  <section class="media-compose-dialog" role="dialog" aria-modal="true" aria-labelledby="mediaComposeTitle">
+    <header class="media-compose-header">
+      <button class="media-compose-close" id="mediaComposeClose" type="button" aria-label="Закрыть">×</button>
+      <div>
+        <strong id="mediaComposeTitle">Отправить медиа</strong>
+        <small id="mediaComposeSummary"></small>
+      </div>
+      <button class="media-compose-add" id="mediaComposeAdd" type="button">＋ Добавить</button>
+    </header>
+
+    <div class="media-compose-preview" id="mediaComposePreview"></div>
+
+    <label class="media-compose-group" id="mediaComposeGroupRow" hidden>
+      <span>
+        <strong>Сгруппировать медиа</strong>
+        <small>Отправить выбранное одним альбомом</small>
+      </span>
+      <span class="media-compose-switch">
+        <input id="mediaComposeGroup" type="checkbox" checked>
+        <span><i></i></span>
+      </span>
+    </label>
+
+    <div class="media-compose-caption">
+      <textarea id="mediaComposeCaption" rows="1" maxlength="4096" placeholder="Добавить подпись…"></textarea>
+    </div>
+
+    <div class="media-upload-progress" id="mediaUploadProgress" hidden>
+      <span id="mediaUploadProgressBar"></span>
+    </div>
+
+    <footer class="media-compose-footer">
+      <small id="mediaComposeHint">Фото и видео будут отправлены как медиа.</small>
+      <button class="media-compose-send" id="mediaComposeSend" type="button">Отправить</button>
+    </footer>
+  </section>
+</div>
+{% endif %}
 
 <div class="profile-drawer-backdrop" id="profileMenuBackdrop" aria-hidden="true"></div>
 <aside class="profile-drawer" id="profileMenu" aria-hidden="true">
