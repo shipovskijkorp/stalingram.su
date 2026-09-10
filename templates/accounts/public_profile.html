@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ profile_user.display_name }} — Stalingram{% endblock %}
+{% block body_class %}profile-body{% endblock %}
+
+{% block content %}
+<main class="public-profile-shell">
+  <header class="public-profile-topbar">
+    <a href="{% url 'messenger:home' %}" aria-label="Назад">←</a>
+    <strong>Профиль</strong>
+    <span></span>
+  </header>
+
+  <article class="public-profile-card">
+    <div class="public-profile-cover">
+      <span class="public-profile-cover__star">★</span>
+    </div>
+
+    <div class="public-profile-main">
+      {% if profile_user.avatar %}
+        <img class="public-profile-avatar" src="{{ profile_user.avatar.url }}" alt="Фотография {{ profile_user.display_name }}">
+      {% else %}
+        <span class="public-profile-avatar public-profile-avatar--fallback">{{ profile_user.initials }}</span>
+      {% endif %}
+
+      <div class="public-profile-title">
+        <h1>{{ profile_user.display_name }}</h1>
+        <p>@{{ profile_user.username }}</p>
+      </div>
+
+      <button class="public-profile-copy" type="button" data-copy-profile data-profile-url="{% url 'accounts:public_profile' profile_user.username %}">Скопировать ссылку</button>
+    </div>
+
+    {% if profile_user.bio %}
+      <section class="public-profile-section">
+        <span class="public-profile-label">О себе</span>
+        <p>{{ profile_user.bio|linebreaksbr }}</p>
+      </section>
+    {% endif %}
+
+    <section class="public-profile-section public-profile-details">
+      <div>
+        <span class="public-profile-label">Имя пользователя</span>
+        <p>@{{ profile_user.username }}</p>
+      </div>
+      <div>
+        <span class="public-profile-label">В Stalingram с</span>
+        <p>{{ profile_user.date_joined|date:'d.m.Y' }}</p>
+      </div>
+    </section>
+
+    <footer class="public-profile-footer">
+      Почта и другие данные учётной записи здесь не показываются.
+    </footer>
+  </article>
+</main>
+{% endblock %}

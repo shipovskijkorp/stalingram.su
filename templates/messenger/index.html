@@ -7,7 +7,7 @@
 <div class="app-shell">
   <aside class="sidebar">
     <header class="sidebar__topbar">
-      <button class="icon-button menu-button" type="button" aria-label="Меню" title="Главное управление связи">
+      <button class="icon-button menu-button" id="profileMenuButton" type="button" aria-label="Меню" aria-controls="profileMenu" aria-expanded="false" title="Меню">
         <span></span><span></span><span></span>
       </button>
       <a class="brand" href="{% url 'messenger:home' %}" aria-label="Stalingram">
@@ -33,14 +33,14 @@
     </section>
 
     <footer class="sidebar__footer">
-      <span class="account-mini" title="{{ request.user.email }}">
-        <span class="account-mini__avatar">{{ request.user.username|slice:':1'|upper }}</span>
-        <span class="account-mini__name">{{ request.user.username }}</span>
-      </span>
-      <form method="post" action="{% url 'accounts:logout' %}" class="logout-form">
-        {% csrf_token %}
-        <button type="submit" title="Выйти">Выйти</button>
-      </form>
+      <a class="account-mini" href="{% url 'accounts:profile' %}" title="Открыть профиль">
+        {% if request.user.avatar %}
+          <img class="account-mini__avatar account-mini__avatar--image" src="{{ request.user.avatar.url }}" alt="">
+        {% else %}
+          <span class="account-mini__avatar">{{ request.user.initials }}</span>
+        {% endif %}
+        <span class="account-mini__name">{{ request.user.display_name }}</span>
+      </a>
       <button id="easterStar" class="footer-star" type="button" title="Одобрено Госпланом">★</button>
     </footer>
   </aside>
@@ -55,6 +55,36 @@
     </section>
   </main>
 </div>
+
+<div class="profile-drawer-backdrop" id="profileMenuBackdrop" aria-hidden="true"></div>
+<aside class="profile-drawer" id="profileMenu" aria-hidden="true">
+  <header class="profile-drawer__hero">
+    <button class="profile-drawer__close" id="profileMenuClose" type="button" aria-label="Закрыть меню">×</button>
+    <a class="profile-drawer__identity" href="{% url 'accounts:profile' %}">
+      {% if request.user.avatar %}
+        <img class="profile-drawer__avatar" src="{{ request.user.avatar.url }}" alt="Фотография {{ request.user.display_name }}">
+      {% else %}
+        <span class="profile-drawer__avatar profile-drawer__avatar--fallback">{{ request.user.initials }}</span>
+      {% endif %}
+      <span class="profile-drawer__name">{{ request.user.display_name }}</span>
+      <span class="profile-drawer__username">@{{ request.user.username }}</span>
+    </a>
+  </header>
+
+  <nav class="profile-drawer__nav" aria-label="Меню профиля">
+    <a href="{% url 'accounts:profile' %}"><span>●</span><strong>Мой профиль</strong></a>
+    <a href="{% url 'accounts:public_profile' request.user.username %}"><span>↗</span><strong>Публичная страница</strong></a>
+    <a href="{% url 'accounts:password_change' %}"><span>⌁</span><strong>Сменить пароль</strong></a>
+  </nav>
+
+  <div class="profile-drawer__footer">
+    <form method="post" action="{% url 'accounts:logout' %}">
+      {% csrf_token %}
+      <button type="submit"><span>↪</span> Выйти</button>
+    </form>
+    <small>Stalingram · связь трудящихся</small>
+  </div>
+</aside>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 {% endblock %}

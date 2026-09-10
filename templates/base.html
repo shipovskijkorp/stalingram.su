@@ -8,6 +8,7 @@
   <title>{% block title %}Stalingram{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
+  <link rel="stylesheet" href="{% static 'css/profile.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -18,6 +19,7 @@
   {% endif %}
   {% block content %}{% endblock %}
   <script src="{% static 'js/app.js' %}"></script>
+  <script src="{% static 'js/profile.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

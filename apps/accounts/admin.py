@@ -3,4 +3,9 @@ from django.contrib.auth.admin import UserAdmin
 
 from .models import User
 
-admin.site.register(User, UserAdmin)
+
+@admin.register(User)
+class StalingramUserAdmin(UserAdmin):
+    fieldsets = UserAdmin.fieldsets + (
+        ("Профиль Stalingram", {"fields": ("bio", "avatar")}),
+    )
