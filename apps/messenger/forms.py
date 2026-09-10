@@ -6,9 +6,11 @@ from django import forms
 MAX_ATTACHMENTS = 10
 MAX_FILE_SIZE = 25 * 1024 * 1024
 MAX_TOTAL_SIZE = 100 * 1024 * 1024
-ALLOWED_EXTENSIONS = {
+MEDIA_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif",
     ".mp4", ".webm", ".mov", ".m4v",
+}
+FILE_EXTENSIONS = MEDIA_EXTENSIONS | {
     ".mp3", ".ogg", ".wav", ".m4a", ".flac",
 }
 
@@ -31,6 +33,9 @@ class MultipleFileField(forms.FileField):
 
 
 class MessageForm(forms.Form):
+    MODE_MEDIA = "media"
+    MODE_FILE = "file"
+
     text = forms.CharField(
         required=False,
         max_length=4096,
@@ -43,34 +48,49 @@ class MessageForm(forms.Form):
             }
         ),
     )
-    attachments = MultipleFileField(
+    attachment_mode = forms.ChoiceField(
         required=False,
-        widget=MultipleFileInput(
-            attrs={
-                "accept": "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac",
-            }
-        ),
+        choices=((MODE_MEDIA, "Медиа"), (MODE_FILE, "Файл")),
+        initial=MODE_MEDIA,
+        widget=forms.HiddenInput(),
     )
+    attachments = MultipleFileField(required=False)
 
     def clean_text(self):
         return self.cleaned_data.get("text", "").strip()
 
+    def clean_attachment_mode(self):
+        return self.cleaned_data.get("attachment_mode") or self.MODE_MEDIA
+
     def clean_attachments(self):
         files = self.cleaned_data.get("attachments") or []
         if len(files) > MAX_ATTACHMENTS:
-            raise forms.ValidationError(f"За раз можно отправить не больше {MAX_ATTACHMENTS} файлов.")
+            raise forms.ValidationError(
+                f"За раз можно отправить не больше {MAX_ATTACHMENTS} файлов."
+            )
 
+        mode = self.cleaned_data.get("attachment_mode") or self.MODE_MEDIA
+        allowed_extensions = MEDIA_EXTENSIONS if mode == self.MODE_MEDIA else FILE_EXTENSIONS
         total_size = 0
+
         for uploaded in files:
             extension = Path(uploaded.name).suffix.lower()
-            if extension not in ALLOWED_EXTENSIONS:
-                raise forms.ValidationError("Поддерживаются изображения, видео и аудио стандартных форматов.")
+            if extension not in allowed_extensions:
+                if mode == self.MODE_MEDIA:
+                    raise forms.ValidationError(
+                        "В режиме медиа можно отправлять только изображения и видео."
+                    )
+                raise forms.ValidationError(
+                    "Сейчас как файлы поддерживаются изображения, видео и аудио."
+                )
             if uploaded.size > MAX_FILE_SIZE:
                 raise forms.ValidationError("Один файл должен быть не больше 25 МБ.")
             total_size += uploaded.size
 
         if total_size > MAX_TOTAL_SIZE:
-            raise forms.ValidationError("Общий размер вложений должен быть не больше 100 МБ.")
+            raise forms.ValidationError(
+                "Общий размер вложений должен быть не больше 100 МБ."
+            )
         return files
 
     def clean(self):

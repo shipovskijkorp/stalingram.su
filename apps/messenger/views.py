@@ -201,6 +201,9 @@ def send_message(request, chat_id):
                 messages.error(request, error)
         return redirect("messenger:chat", chat_id=chat.pk)
 
+    attachment_mode = form.cleaned_data.get("attachment_mode") or MessageForm.MODE_MEDIA
+    send_as_file = attachment_mode == MessageForm.MODE_FILE
+
     with transaction.atomic():
         message = Message.objects.create(
             chat=chat,
@@ -211,7 +214,11 @@ def send_message(request, chat_id):
             MessageAttachment.objects.create(
                 message=message,
                 file=uploaded,
-                kind=attachment_kind(uploaded),
+                kind=(
+                    MessageAttachment.Kind.FILE
+                    if send_as_file
+                    else attachment_kind(uploaded)
+                ),
                 original_name=Path(uploaded.name).name[:255],
                 mime_type=(getattr(uploaded, "content_type", "") or "")[:127],
                 size=uploaded.size,

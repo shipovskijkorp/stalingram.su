@@ -104,13 +104,58 @@ class MessengerTests(TestCase):
         )
         response = self.client.post(
             reverse("messenger:send_message", args=[chat.pk]),
-            {"text": "", "attachments": upload},
+            {"text": "Подпись", "attachment_mode": "media", "attachments": upload},
         )
 
         self.assertRedirects(response, reverse("messenger:chat", args=[chat.pk]))
         attachment = MessageAttachment.objects.get()
         self.assertEqual(attachment.kind, MessageAttachment.Kind.IMAGE)
         self.assertEqual(attachment.original_name, "photo.jpg")
+        self.assertEqual(attachment.message.text, "Подпись")
+
+    def test_media_can_be_sent_as_file_without_inline_rendering(self):
+        chat = get_or_create_direct_chat(self.alice, self.bob)
+        upload = SimpleUploadedFile(
+            "original.png",
+            b"original-file-content",
+            content_type="image/png",
+        )
+        response = self.client.post(
+            reverse("messenger:send_message", args=[chat.pk]),
+            {"attachment_mode": "file", "attachments": upload},
+        )
+
+        self.assertRedirects(response, reverse("messenger:chat", args=[chat.pk]))
+        attachment = MessageAttachment.objects.get()
+        self.assertEqual(attachment.kind, MessageAttachment.Kind.FILE)
+        self.assertEqual(attachment.original_name, "original.png")
+
+    def test_audio_is_rejected_in_media_mode_and_allowed_as_file(self):
+        chat = get_or_create_direct_chat(self.alice, self.bob)
+        media_upload = SimpleUploadedFile(
+            "track.mp3",
+            b"audio",
+            content_type="audio/mpeg",
+        )
+        response = self.client.post(
+            reverse("messenger:send_message", args=[chat.pk]),
+            {"attachment_mode": "media", "attachments": media_upload},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Message.objects.exists())
+
+        file_upload = SimpleUploadedFile(
+            "track.mp3",
+            b"audio",
+            content_type="audio/mpeg",
+        )
+        response = self.client.post(
+            reverse("messenger:send_message", args=[chat.pk]),
+            {"attachment_mode": "file", "attachments": file_upload},
+        )
+        self.assertRedirects(response, reverse("messenger:chat", args=[chat.pk]))
+        self.assertEqual(MessageAttachment.objects.get().kind, MessageAttachment.Kind.FILE)
 
     def test_empty_message_is_rejected(self):
         chat = get_or_create_direct_chat(self.alice, self.bob)
