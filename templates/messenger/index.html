@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Stalingram{% endblock %}
+{% block title %}{% if selected_chat %}{{ selected_chat.other_user.display_name }} — Stalingram{% else %}Stalingram{% endif %}{% endblock %}
 {% block body_class %}app-body{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/messenger.css' %}">{% endblock %}
 
 {% block content %}
-<div class="app-shell">
+<div class="app-shell{% if selected_chat %} chat-open{% endif %}">
   <aside class="sidebar">
     <header class="sidebar__topbar">
       <button class="icon-button menu-button" id="profileMenuButton" type="button" aria-label="Меню" aria-controls="profileMenu" aria-expanded="false" title="Меню">
@@ -14,22 +16,49 @@
         <span class="brand__mark" aria-hidden="true">★</span>
         <span class="brand__word">STALINGRAM</span>
       </a>
-      <button class="icon-button compose-button" type="button" aria-label="Новый чат" title="Создание чатов появится следующим этапом" disabled>✎</button>
+      <a class="icon-button compose-button" href="{% url 'messenger:contacts' %}?focus=search" aria-label="Новый чат" title="Новый чат">✎</a>
     </header>
 
     <div class="search-wrap">
-      <label class="search search--disabled">
+      <label class="search" for="chatFilter">
         <span aria-hidden="true">⌕</span>
-        <input type="search" placeholder="Поиск по чатам" disabled>
+        <input id="chatFilter" type="search" placeholder="Поиск чата по @username" autocomplete="off">
       </label>
     </div>
 
-    <section class="chat-list chat-list--empty" aria-label="Чаты">
-      <div class="chat-empty">
-        <span class="chat-empty__icon">☰</span>
-        <strong>Диалогов пока нет</strong>
-        <p>Когда появятся чаты, они будут собраны здесь.</p>
-      </div>
+    <section class="chat-list{% if not chats %} chat-list--empty{% endif %}" id="chatList" aria-label="Чаты">
+      {% for chat in chats %}
+        <a class="chat-row{% if selected_chat and selected_chat.pk == chat.pk %} is-active{% endif %}" href="{% url 'messenger:chat' chat.pk %}" data-chat-row data-search="{{ chat.other_user.username|lower }}">
+          {% if chat.other_user.avatar %}
+            <img class="chat-row__avatar" src="{{ chat.other_user.avatar.url }}" alt="">
+          {% else %}
+            <span class="chat-row__avatar chat-row__avatar--fallback">{{ chat.other_user.initials }}</span>
+          {% endif %}
+          <span class="chat-row__body">
+            <span class="chat-row__headline">
+              <strong>{{ chat.other_user.display_name }}</strong>
+              {% if chat.last_message_created_at_ui %}<time>{{ chat.last_message_created_at_ui|date:'H:i' }}</time>{% endif %}
+            </span>
+            <span class="chat-row__meta">@{{ chat.other_user.username }}</span>
+            <span class="chat-row__preview">
+              {% if chat.last_message_id_ui %}
+                {% if chat.last_message_sender_id_ui == request.user.pk %}<b>Вы:</b> {% endif %}{{ chat.last_message_preview_ui|truncatechars:58 }}
+              {% else %}
+                Диалог создан
+              {% endif %}
+            </span>
+          </span>
+          {% if chat.unread_count_ui %}<span class="chat-row__unread">{{ chat.unread_count_ui }}</span>{% endif %}
+        </a>
+      {% empty %}
+        <div class="chat-empty">
+          <span class="chat-empty__icon">✉</span>
+          <strong>Диалогов пока нет</strong>
+          <p>Найдите пользователя по имени и начните переписку.</p>
+          <a class="chat-empty__action" href="{% url 'messenger:contacts' %}?focus=search">Найти пользователя</a>
+        </div>
+      {% endfor %}
+      <div class="chat-filter-empty" id="chatFilterEmpty" hidden>Ничего не найдено.</div>
     </section>
 
     <footer class="sidebar__footer">
@@ -41,19 +70,98 @@
         {% endif %}
         <span class="account-mini__name">{{ request.user.display_name }}</span>
       </a>
+      <a class="sidebar-footer-link" href="{% url 'messenger:contacts' %}" title="Контакты">Контакты</a>
       <button id="easterStar" class="footer-star" type="button" title="Одобрено Госпланом">★</button>
     </footer>
   </aside>
 
-  <main class="conversation conversation--empty">
-    <div class="wallpaper" aria-hidden="true"></div>
-    <section class="conversation-empty">
-      <span class="conversation-empty__star">★</span>
-      <h1>Stalingram</h1>
-      <p>Выберите диалог, когда здесь появятся ваши чаты.</p>
-      <small>Сообщений нет. Дефицит тоже пока не объявлен.</small>
-    </section>
-  </main>
+  {% if selected_chat %}
+    <main class="conversation conversation--chat" data-chat-id="{{ selected_chat.pk }}">
+      <header class="conversation-header">
+        <a class="icon-button mobile-back" href="{% url 'messenger:home' %}" aria-label="Назад">←</a>
+        <a class="conversation-header__identity" href="{% url 'accounts:public_profile' selected_chat.other_user.username %}">
+          {% if selected_chat.other_user.avatar %}
+            <img class="conversation-header__avatar" src="{{ selected_chat.other_user.avatar.url }}" alt="">
+          {% else %}
+            <span class="conversation-header__avatar conversation-header__avatar--fallback">{{ selected_chat.other_user.initials }}</span>
+          {% endif %}
+          <span class="conversation-header__text">
+            <strong>{{ selected_chat.other_user.display_name }}</strong>
+            <small>@{{ selected_chat.other_user.username }}</small>
+          </span>
+        </a>
+        <a class="icon-button conversation-header__profile" href="{% url 'accounts:public_profile' selected_chat.other_user.username %}" title="Профиль">⋮</a>
+      </header>
+
+      <section class="message-stage" id="messageStage" data-poll-url="{% url 'messenger:poll_messages' selected_chat.pk %}">
+        <div class="wallpaper" aria-hidden="true"></div>
+        <div class="message-flow" id="messageFlow">
+          <div class="dialog-start">
+            {% if selected_chat.other_user.avatar %}
+              <img src="{{ selected_chat.other_user.avatar.url }}" alt="">
+            {% else %}
+              <span>{{ selected_chat.other_user.initials }}</span>
+            {% endif %}
+            <strong>{{ selected_chat.other_user.display_name }}</strong>
+            <small>@{{ selected_chat.other_user.username }}</small>
+            <p>Начало вашей переписки.</p>
+          </div>
+
+          {% for message in chat_messages %}
+            <article class="message{% if message.sender_id == request.user.pk %} message--outgoing{% else %} message--incoming{% endif %}" data-message-id="{{ message.pk }}">
+              {% if message.attachments.all %}
+                <div class="message-media">
+                  {% for attachment in message.attachments.all %}
+                    {% if attachment.kind == 'image' %}
+                      <a class="message-media__item" href="{{ attachment.file.url }}" target="_blank" rel="noopener">
+                        <img class="message-media__image" src="{{ attachment.file.url }}" alt="{{ attachment.original_name }}" loading="lazy">
+                      </a>
+                    {% elif attachment.kind == 'video' %}
+                      <video class="message-media__video" controls preload="metadata" src="{{ attachment.file.url }}"></video>
+                    {% elif attachment.kind == 'audio' %}
+                      <div class="message-media__audio">
+                        <span>{{ attachment.original_name }}</span>
+                        <audio controls preload="metadata" src="{{ attachment.file.url }}"></audio>
+                      </div>
+                    {% else %}
+                      <a class="message-media__file" href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name }}</a>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if message.text %}<p class="message__text">{{ message.text|linebreaksbr }}</p>{% endif %}
+              <footer>
+                <time>{{ message.created_at|date:'H:i' }}</time>
+                {% if message.sender_id == request.user.pk %}<span class="message-check">✓✓</span>{% endif %}
+              </footer>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <form class="composer" id="messageForm" method="post" action="{% url 'messenger:send_message' selected_chat.pk %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="attachment-tray" id="attachmentTray" hidden></div>
+        <label class="composer__attach" for="attachmentsInput" title="Прикрепить медиа">＋</label>
+        <input id="attachmentsInput" class="visually-hidden" type="file" name="attachments" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac">
+        <div class="composer__field">
+          <textarea id="messageInput" name="text" rows="1" maxlength="4096" placeholder="Сообщение" autocomplete="off"></textarea>
+        </div>
+        <button class="send-button" id="sendButton" type="submit" aria-label="Отправить">➤</button>
+      </form>
+    </main>
+  {% else %}
+    <main class="conversation conversation--empty">
+      <div class="wallpaper" aria-hidden="true"></div>
+      <section class="conversation-empty">
+        <span class="conversation-empty__star">★</span>
+        <h1>Stalingram</h1>
+        <p>Выберите существующий диалог или найдите пользователя по @username.</p>
+        <a class="empty-primary" href="{% url 'messenger:contacts' %}?focus=search">Новый диалог</a>
+        <small>Пятилетний план по сообщениям начинается с первого «привет».</small>
+      </section>
+    </main>
+  {% endif %}
 </div>
 
 <div class="profile-drawer-backdrop" id="profileMenuBackdrop" aria-hidden="true"></div>
@@ -71,7 +179,8 @@
     </a>
   </header>
 
-  <nav class="profile-drawer__nav" aria-label="Меню профиля">
+  <nav class="profile-drawer__nav" aria-label="Главное меню">
+    <a href="{% url 'messenger:contacts' %}"><span>◎</span><strong>Контакты</strong></a>
     <a href="{% url 'accounts:profile' %}"><span>●</span><strong>Мой профиль</strong></a>
     <a href="{% url 'accounts:public_profile' request.user.username %}"><span>↗</span><strong>Публичная страница</strong></a>
     <a href="{% url 'accounts:password_change' %}"><span>⌁</span><strong>Сменить пароль</strong></a>
@@ -88,3 +197,5 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 {% endblock %}
+
+{% block extra_scripts %}<script src="{% static 'js/messenger.js' %}"></script>{% endblock %}
