@@ -422,8 +422,10 @@
     <small>Stalingram · связь трудящихся</small>
   </div>
 </aside>
-
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
-{% block extra_scripts %}{% if selected_chat %}<script src="{% static 'js/chat.js' %}"></script>{% else %}<script src="{% static 'js/chat.js' %}"></script>{% endif %}{% endblock %}
+{% block extra_scripts %}
+<script src="{% static 'js/messenger.js' %}"></script>
+<script src="{% static 'js/chat.js' %}"></script>
+{% endblock %}
