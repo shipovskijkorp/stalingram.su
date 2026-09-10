@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 
@@ -10,7 +11,7 @@ class UserActivityMiddleware:
             now = timezone.now()
             previous = request.session.get("stalingram_activity_touch", 0)
             if now.timestamp() - previous >= 45:
-                type(request.user).objects.filter(pk=request.user.pk).update(last_seen_at=now)
+                get_user_model().objects.filter(pk=request.user.pk).update(last_seen_at=now)
                 request.user.last_seen_at = now
                 request.session["stalingram_activity_touch"] = int(now.timestamp())
         return self.get_response(request)
