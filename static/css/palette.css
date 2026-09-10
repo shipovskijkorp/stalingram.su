@@ -1,0 +1,114 @@
+:root {
+  --red: #cc0000;
+  --red-dark: #960000;
+  --red-soft: #e23a3a;
+}
+
+.auth-body {
+  background:
+    radial-gradient(circle at 14% 12%, rgba(255,255,255,.44), transparent 24%),
+    radial-gradient(circle at 88% 84%, rgba(204,0,0,.09), transparent 28%),
+    linear-gradient(145deg, #d2c2aa, #ece2d3 52%, #c9bba6);
+}
+.field input:focus,
+.profile-field input:focus,
+.profile-field textarea:focus,
+.password-form input:focus,
+.media-compose-caption textarea:focus {
+  border-color: rgba(204,0,0,.5);
+  box-shadow: 0 0 0 3px rgba(204,0,0,.09);
+}
+.field-error,
+.profile-field-error { color: #c21818 !important; }
+.form-alert {
+  border-color: rgba(204,0,0,.18);
+  background: rgba(204,0,0,.07);
+  color: #b00000;
+}
+.primary-button,
+.send-button {
+  background: linear-gradient(180deg, #d91a1a, #ad0000);
+  box-shadow: 0 7px 18px rgba(160,0,0,.24);
+}
+.primary-button:hover { box-shadow: 0 9px 22px rgba(160,0,0,.3); }
+.sidebar__topbar {
+  background: linear-gradient(180deg, #d10d0d, #a60000);
+  border-bottom-color: rgba(92,0,0,.32);
+}
+.chat-row:hover { background: rgba(204,0,0,.045); }
+.chat-row.is-active { background: linear-gradient(90deg, rgba(204,0,0,.15), rgba(204,0,0,.055)); }
+.message--outgoing {
+  background: #f2d7d7;
+  border-color: rgba(204,0,0,.11);
+}
+.profile-drawer__hero { background: linear-gradient(155deg, #d31313, #9c0000 72%); }
+.profile-drawer__avatar,
+.profile-drawer__avatar--fallback { background: #df3d3d; }
+.profile-drawer__footer button,
+.username-input > span { color: var(--red); }
+.profile-drawer__footer button:hover,
+.settings-logout button:hover,
+.link-button:hover,
+.public-profile-copy,
+.media-compose-add:hover { background: rgba(204,0,0,.07); }
+.settings-nav a.is-active { background: rgba(204,0,0,.09); }
+.settings-logout button,
+.danger-zone button { color: #bd1717; }
+.public-profile-cover {
+  background:
+    linear-gradient(135deg, rgba(240,196,73,.17), transparent 44%),
+    linear-gradient(155deg, #d51a1a, #980000);
+}
+.theme-option:hover { border-color: rgba(204,0,0,.28); }
+.theme-option.is-selected {
+  border-color: rgba(204,0,0,.5);
+  background: rgba(204,0,0,.07);
+  box-shadow: inset 0 0 0 1px rgba(204,0,0,.08);
+}
+.theme-preview--light i { background: #cc0000; }
+.theme-preview--dark i { background: #a60000; }
+.switch-control input:focus-visible + .switch-control__track { outline-color: rgba(204,0,0,.18); }
+.chat-folder-tabs a:hover { background: rgba(204,0,0,.05); }
+.chat-folder-tabs a.is-active,
+.chat-folder-tabs a span { background: rgba(204,0,0,.1); }
+.message.is-pinned { box-shadow: 0 5px 18px rgba(76,50,31,.055), inset 3px 0 0 rgba(204,0,0,.35); }
+@keyframes message-target-flash {
+  0%, 100% { box-shadow: 0 5px 18px rgba(76,50,31,.055); }
+  35% { box-shadow: 0 0 0 4px rgba(204,0,0,.2), 0 7px 24px rgba(76,50,31,.08); }
+}
+.message-reply-preview,
+.shared-file-item > span:first-child,
+.attachment-menu__icon,
+.media-preview-file__icon { background: rgba(204,0,0,.08); }
+.message__text a { color: #b80000; }
+.media-upload-progress { background: rgba(204,0,0,.1); }
+.chat-drop-overlay > div { border-color: rgba(204,0,0,.38); }
+
+body[data-theme="dark"] {
+  --red: #e12b2b;
+  --red-dark: #ff5a5a;
+  --red-soft: #e54b4b;
+}
+body[data-theme="dark"] .sidebar__topbar { background: linear-gradient(180deg, #bd0808, #790000); }
+body[data-theme="dark"] .chat-row:hover { background: rgba(204,0,0,.09); }
+body[data-theme="dark"] .chat-row.is-active { background: linear-gradient(90deg, rgba(204,0,0,.22), rgba(204,0,0,.08)); }
+body[data-theme="dark"] .message--outgoing {
+  border-color: rgba(225,43,43,.2);
+  background: #4d2020;
+}
+body[data-theme="dark"] .message--outgoing footer { color: #d49a9a; }
+body[data-theme="dark"] .settings-brand { color: #ff6a6a; }
+body[data-theme="dark"] .settings-nav a.is-active {
+  background: rgba(204,0,0,.17);
+  color: #ff6262;
+}
+body[data-theme="dark"] .theme-option:hover { border-color: rgba(255,98,98,.34); }
+body[data-theme="dark"] .theme-option.is-selected {
+  border-color: rgba(255,98,98,.58);
+  background: rgba(204,0,0,.15);
+}
+body[data-theme="dark"] .chat-folder-tabs a:hover,
+body[data-theme="dark"] .chat-folder-tabs a.is-active { background: rgba(204,0,0,.16); }
+body[data-theme="dark"] .message-reply-preview { background: rgba(204,0,0,.13); }
+body[data-theme="dark"] .message__text a { color: #ff6b6b; }
+body[data-theme="dark"] .chat-drop-overlay > div { border-color: rgba(225,43,43,.42); }
