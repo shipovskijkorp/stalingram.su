@@ -67,6 +67,12 @@ class ChatParticipant(models.Model):
         blank=True,
         related_name="read_by_memberships",
     )
+    is_pinned = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    is_muted = models.BooleanField(default=False)
+    draft_text = models.TextField(blank=True, default="", max_length=4096)
+    draft_updated_at = models.DateTimeField(null=True, blank=True)
+    last_typing_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -85,7 +91,25 @@ class Message(models.Model):
         related_name="sent_messages",
     )
     text = models.TextField(blank=True, max_length=4096)
+    reply_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replies",
+    )
+    forwarded_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="forwarded_copies",
+    )
+    forwarded_from_name = models.CharField(max_length=300, blank=True, default="")
+    forwarded_from_username = models.CharField(max_length=150, blank=True, default="")
+    is_deleted = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
     edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -93,6 +117,8 @@ class Message(models.Model):
 
     @property
     def preview(self):
+        if self.is_deleted:
+            return "Сообщение удалено"
         compact = " ".join(self.text.split())
         if compact:
             return compact
@@ -126,3 +152,24 @@ class MessageAttachment(models.Model):
 
     def __str__(self):
         return self.original_name
+
+
+class PinnedMessage(models.Model):
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="pinned_messages")
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="pin_records")
+    pinned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="pinned_chat_messages",
+    )
+    pinned_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-pinned_at", "-id")
+        constraints = [
+            models.UniqueConstraint(fields=("chat", "message"), name="unique_pinned_message"),
+        ]
+
+    def __str__(self):
+        return f"Pinned {self.message_id} in {self.chat_id}"

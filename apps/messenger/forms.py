@@ -7,11 +7,8 @@ MAX_ATTACHMENTS = 10
 MAX_FILE_SIZE = 25 * 1024 * 1024
 MAX_TOTAL_SIZE = 100 * 1024 * 1024
 MEDIA_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".webp", ".gif",
+    ".png", ".jpg", ".jpeg", ".webp",
     ".mp4", ".webm", ".mov", ".m4v",
-}
-FILE_EXTENSIONS = MEDIA_EXTENSIONS | {
-    ".mp3", ".ogg", ".wav", ".m4a", ".flac",
 }
 
 
@@ -36,23 +33,12 @@ class MessageForm(forms.Form):
     MODE_MEDIA = "media"
     MODE_FILE = "file"
 
-    text = forms.CharField(
-        required=False,
-        max_length=4096,
-        widget=forms.Textarea(
-            attrs={
-                "rows": 1,
-                "maxlength": 4096,
-                "placeholder": "Сообщение",
-                "autocomplete": "off",
-            }
-        ),
-    )
+    text = forms.CharField(required=False, max_length=4096)
+    reply_to = forms.IntegerField(required=False, min_value=1)
     attachment_mode = forms.ChoiceField(
         required=False,
         choices=((MODE_MEDIA, "Медиа"), (MODE_FILE, "Файл")),
         initial=MODE_MEDIA,
-        widget=forms.HiddenInput(),
     )
     attachments = MultipleFileField(required=False)
 
@@ -70,19 +56,19 @@ class MessageForm(forms.Form):
             )
 
         mode = self.cleaned_data.get("attachment_mode") or self.MODE_MEDIA
-        allowed_extensions = MEDIA_EXTENSIONS if mode == self.MODE_MEDIA else FILE_EXTENSIONS
         total_size = 0
-
         for uploaded in files:
             extension = Path(uploaded.name).suffix.lower()
-            if extension not in allowed_extensions:
-                if mode == self.MODE_MEDIA:
+            content_type = (getattr(uploaded, "content_type", "") or "").lower()
+            if extension == ".gif" or content_type == "image/gif":
+                raise forms.ValidationError("GIF в Stalingram пока отключены.")
+            if mode == self.MODE_MEDIA:
+                if extension not in MEDIA_EXTENSIONS or not (
+                    content_type.startswith("image/") or content_type.startswith("video/")
+                ):
                     raise forms.ValidationError(
                         "В режиме медиа можно отправлять только изображения и видео."
                     )
-                raise forms.ValidationError(
-                    "Сейчас как файлы поддерживаются изображения, видео и аудио."
-                )
             if uploaded.size > MAX_FILE_SIZE:
                 raise forms.ValidationError("Один файл должен быть не больше 25 МБ.")
             total_size += uploaded.size
@@ -96,5 +82,12 @@ class MessageForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         if not cleaned.get("text") and not cleaned.get("attachments"):
-            raise forms.ValidationError("Введите сообщение или прикрепите медиа.")
+            raise forms.ValidationError("Введите сообщение или прикрепите файл.")
         return cleaned
+
+
+class EditMessageForm(forms.Form):
+    text = forms.CharField(required=False, max_length=4096)
+
+    def clean_text(self):
+        return self.cleaned_data.get("text", "").strip()

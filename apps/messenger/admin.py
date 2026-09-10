@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Chat, ChatParticipant, Contact, Message, MessageAttachment
+from .models import (
+    Chat,
+    ChatParticipant,
+    Contact,
+    Message,
+    MessageAttachment,
+    PinnedMessage,
+)
 
 
 class ChatParticipantInline(admin.TabularInline):
@@ -28,6 +35,13 @@ class MessageAttachmentInline(admin.TabularInline):
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ("id", "chat", "sender", "created_at")
-    search_fields = ("sender__username", "text")
+    list_display = ("id", "chat", "sender", "is_deleted", "edited_at", "created_at")
+    list_filter = ("is_deleted",)
+    search_fields = ("sender__username", "text", "forwarded_from_name")
     inlines = (MessageAttachmentInline,)
+
+
+@admin.register(PinnedMessage)
+class PinnedMessageAdmin(admin.ModelAdmin):
+    list_display = ("message", "chat", "pinned_by", "pinned_at")
+    search_fields = ("message__text", "pinned_by__username")

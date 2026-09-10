@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 
 class User(AbstractUser):
@@ -22,6 +25,7 @@ class User(AbstractUser):
         default=Theme.LIGHT,
     )
     enter_to_send = models.BooleanField("отправка по Enter", default=True)
+    last_seen_at = models.DateTimeField("последняя активность", null=True, blank=True)
 
     @property
     def display_name(self):
@@ -33,6 +37,13 @@ class User(AbstractUser):
         if parts:
             return "".join(part[0] for part in parts[:2]).upper()
         return self.username[:2].upper() or "?"
+
+    @property
+    def is_online(self):
+        return bool(
+            self.last_seen_at
+            and self.last_seen_at >= timezone.now() - timedelta(minutes=2)
+        )
 
     def __str__(self):
         return self.username

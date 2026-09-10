@@ -1,24 +1,42 @@
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import BigIntegerField, Count, F, OuterRef, Q, Subquery, Value
+from django.db.models import (
+    BigIntegerField,
+    BooleanField,
+    Count,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    TextField,
+    Value,
+)
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import MessageForm
-from .models import Chat, ChatParticipant, Contact, Message, MessageAttachment
+from .forms import EditMessageForm, MessageForm
+from .models import Chat, ChatParticipant, Contact, Message, MessageAttachment, PinnedMessage
 from .services import (
     attachment_kind,
+    attachment_url,
+    clone_attachments,
+    delete_message_content,
     get_or_create_direct_chat,
     mark_chat_read,
+    other_user_for_chat,
     serialize_message,
+    serialize_pins,
     touch_chat,
 )
 
@@ -36,19 +54,71 @@ def _safe_next(request, fallback):
     return fallback
 
 
+def _wants_json(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
 def _chat_for_user(user, chat_id):
     return get_object_or_404(
-        Chat.objects.filter(participants=user).prefetch_related("participants"),
+        Chat.objects.filter(participants=user)
+        .prefetch_related("participants", "memberships__user")
+        .distinct(),
         pk=chat_id,
     )
 
 
-def _prepare_sidebar_chats(user):
-    last_message = Message.objects.filter(chat=OuterRef("pk")).order_by("-id")
-    last_read = ChatParticipant.objects.filter(chat=OuterRef("pk"), user=user)
+def _membership(chat, user):
+    for membership in chat.memberships.all():
+        if membership.user_id == user.pk:
+            return membership
+    return ChatParticipant.objects.get(chat=chat, user=user)
+
+
+def _other_membership(chat, user):
+    for membership in chat.memberships.all():
+        if membership.user_id != user.pk:
+            return membership
+    return None
+
+
+def _other_last_read_id(chat, user):
+    other = _other_membership(chat, user)
+    if other is not None:
+        return other.last_read_message_id or 0
+    return chat.messages.filter(is_deleted=False).order_by("-id").values_list("id", flat=True).first() or 0
+
+
+def _presence_text(user):
+    if user.is_online:
+        return "в сети"
+    if not user.last_seen_at:
+        return "был(а) давно"
+
+    now = timezone.now()
+    delta = now - user.last_seen_at
+    local_seen = timezone.localtime(user.last_seen_at)
+    if delta < timedelta(minutes=15):
+        return "был(а) недавно"
+    if local_seen.date() == timezone.localdate():
+        return f"был(а) сегодня в {local_seen:%H:%M}"
+    if local_seen.date() == timezone.localdate() - timedelta(days=1):
+        return f"был(а) вчера в {local_seen:%H:%M}"
+    return f"был(а) {local_seen:%d.%m.%Y} в {local_seen:%H:%M}"
+
+
+def _base_message_queryset(chat):
+    return (
+        chat.messages.select_related("sender", "reply_to", "reply_to__sender")
+        .prefetch_related("attachments")
+    )
+
+
+def _prepare_sidebar_chats(user, archived=False):
+    last_message = Message.objects.filter(chat=OuterRef("pk"), is_deleted=False).order_by("-id")
+    membership = ChatParticipant.objects.filter(chat=OuterRef("pk"), user=user)
 
     chats = list(
-        Chat.objects.filter(participants=user)
+        Chat.objects.filter(memberships__user=user, memberships__is_archived=archived)
         .annotate(
             last_message_id_ui=Subquery(last_message.values("id")[:1]),
             last_message_text_ui=Subquery(last_message.values("text")[:1]),
@@ -56,10 +126,19 @@ def _prepare_sidebar_chats(user):
             last_message_created_at_ui=Subquery(last_message.values("created_at")[:1]),
             last_read_message_id_ui=Coalesce(
                 Subquery(
-                    last_read.values("last_read_message_id")[:1],
+                    membership.values("last_read_message_id")[:1],
                     output_field=BigIntegerField(),
                 ),
                 Value(0, output_field=BigIntegerField()),
+            ),
+            is_pinned_ui=Subquery(
+                membership.values("is_pinned")[:1], output_field=BooleanField()
+            ),
+            is_muted_ui=Subquery(
+                membership.values("is_muted")[:1], output_field=BooleanField()
+            ),
+            draft_text_ui=Subquery(
+                membership.values("draft_text")[:1], output_field=TextField()
             ),
         )
         .annotate(
@@ -67,68 +146,168 @@ def _prepare_sidebar_chats(user):
                 "messages",
                 filter=(
                     ~Q(messages__sender=user)
+                    & Q(messages__is_deleted=False)
                     & Q(messages__id__gt=F("last_read_message_id_ui"))
                 ),
             )
         )
         .prefetch_related("participants")
-        .order_by(F("last_message_created_at_ui").desc(nulls_last=True), "-updated_at")
+        .order_by(
+            F("is_pinned_ui").desc(nulls_last=True),
+            F("last_message_created_at_ui").desc(nulls_last=True),
+            "-updated_at",
+        )
     )
 
     for chat in chats:
-        chat.other_user = next(
-            (participant for participant in chat.participants.all() if participant.pk != user.pk),
-            user,
-        )
+        chat.other_user = other_user_for_chat(chat, user)
+        chat.is_saved_ui = chat.other_user.pk == user.pk and chat.direct_key == f"self:{user.pk}"
         preview = " ".join((chat.last_message_text_ui or "").split())
         chat.last_message_preview_ui = preview or "Медиа"
     return chats
 
 
-def _messenger_context(user, selected_chat=None, chat_messages=None, message_form=None):
-    return {
-        "chats": _prepare_sidebar_chats(user),
+def _forward_targets(user):
+    targets = list(
+        Chat.objects.filter(participants=user)
+        .prefetch_related("participants")
+        .distinct()
+        .order_by("-updated_at")[:60]
+    )
+    for chat in targets:
+        chat.other_user = other_user_for_chat(chat, user)
+        chat.is_saved_ui = chat.direct_key == f"self:{user.pk}"
+    return targets
+
+
+def _messenger_context(user, selected_chat=None, chat_messages=None, archived=False, focus_id=0):
+    context = {
+        "chats": _prepare_sidebar_chats(user, archived=archived),
         "selected_chat": selected_chat,
         "chat_messages": chat_messages or [],
-        "message_form": message_form or MessageForm(),
+        "message_form": MessageForm(),
+        "show_archived": archived,
+        "archived_count": ChatParticipant.objects.filter(user=user, is_archived=True).count(),
+        "forward_targets": _forward_targets(user),
+        "message_focus_id": focus_id,
+        "server_time": timezone.now().isoformat(),
     }
+    if selected_chat is None:
+        return context
+
+    membership = _membership(selected_chat, user)
+    other_user = other_user_for_chat(selected_chat, user)
+    selected_chat.other_user = other_user
+    selected_chat.is_saved_ui = selected_chat.direct_key == f"self:{user.pk}"
+    selected_chat.other_status_ui = "Личное облако" if selected_chat.is_saved_ui else _presence_text(other_user)
+    other_last_read_id = _other_last_read_id(selected_chat, user)
+
+    pins = list(
+        PinnedMessage.objects.filter(chat=selected_chat, message__is_deleted=False)
+        .select_related("message", "message__sender")
+        .order_by("-pinned_at", "-id")[:8]
+    )
+    pinned_ids = {pin.message_id for pin in pins}
+    for message in context["chat_messages"]:
+        message.is_pinned_ui = message.pk in pinned_ids
+        message.is_read_ui = message.sender_id == user.pk and message.pk <= other_last_read_id
+
+    shared_items = []
+    attachments = (
+        MessageAttachment.objects.filter(message__chat=selected_chat, message__is_deleted=False)
+        .select_related("message")
+        .order_by("-id")[:36]
+    )
+    for attachment in attachments:
+        attachment.ui_url = attachment_url(attachment)
+        shared_items.append(attachment)
+
+    context.update(
+        {
+            "active_membership": membership,
+            "other_last_read_id": other_last_read_id,
+            "pinned_records": pins,
+            "pinned_message_ids": pinned_ids,
+            "shared_attachments": shared_items,
+            "search_url": reverse("messenger:search_messages", args=[selected_chat.pk]),
+            "draft_url": reverse("messenger:save_draft", args=[selected_chat.pk]),
+            "typing_url": reverse("messenger:typing", args=[selected_chat.pk]),
+        }
+    )
+    return context
+
+
+def _serialized_message(message, user, chat):
+    pinned_ids = set(
+        PinnedMessage.objects.filter(chat=chat, message__is_deleted=False)
+        .values_list("message_id", flat=True)
+    )
+    return serialize_message(
+        message,
+        user,
+        other_last_read_id=_other_last_read_id(chat, user),
+        pinned_ids=pinned_ids,
+    )
 
 
 @login_required
 def home(request):
-    return render(request, "messenger/index.html", _messenger_context(request.user))
+    archived = request.GET.get("archived") == "1"
+    return render(
+        request,
+        "messenger/index.html",
+        _messenger_context(request.user, archived=archived),
+    )
 
 
 @login_required
 def chat_detail(request, chat_id):
     chat = _chat_for_user(request.user, chat_id)
-    latest = chat.messages.order_by("-id").first()
+    membership = _membership(chat, request.user)
+    latest = chat.messages.filter(is_deleted=False).order_by("-id").first()
     if latest:
         mark_chat_read(chat, request.user, latest)
 
-    messages_qs = list(
-        chat.messages.select_related("sender")
-        .prefetch_related("attachments")
-        .order_by("-id")[:100]
-    )
-    messages_qs.reverse()
-    chat.other_user = next(
-        participant for participant in chat.participants.all() if participant.pk != request.user.pk
-    )
+    try:
+        focus_id = max(0, int(request.GET.get("message", "0")))
+    except (TypeError, ValueError):
+        focus_id = 0
+
+    base = _base_message_queryset(chat).filter(is_deleted=False)
+    focus = base.filter(pk=focus_id).first() if focus_id else None
+    if focus is not None:
+        before = list(base.filter(id__lte=focus.pk).order_by("-id")[:50])
+        before.reverse()
+        after = list(base.filter(id__gt=focus.pk).order_by("id")[:50])
+        chat_messages = before + after
+    else:
+        chat_messages = list(base.order_by("-id")[:100])
+        chat_messages.reverse()
+        focus_id = 0
+
     return render(
         request,
         "messenger/index.html",
-        _messenger_context(request.user, chat, messages_qs),
+        _messenger_context(
+            request.user,
+            chat,
+            chat_messages,
+            archived=membership.is_archived,
+            focus_id=focus_id,
+        ),
     )
+
+
+@login_required
+def saved_messages(request):
+    chat = get_or_create_direct_chat(request.user, request.user)
+    return redirect("messenger:chat", chat_id=chat.pk)
 
 
 @login_required
 @require_POST
 def start_chat(request, username):
     target = get_object_or_404(User, username__iexact=username, is_active=True)
-    if target.pk == request.user.pk:
-        messages.info(request, "Чат с самим собой пока не используется как «Избранное».")
-        return redirect("accounts:public_profile", username=request.user.username)
     chat = get_or_create_direct_chat(request.user, target)
     return redirect("messenger:chat", chat_id=chat.pk)
 
@@ -189,7 +368,7 @@ def remove_contact(request, username):
 def send_message(request, chat_id):
     chat = _chat_for_user(request.user, chat_id)
     form = MessageForm(request.POST, request.FILES)
-    wants_json = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    wants_json = _wants_json(request)
 
     if not form.is_valid():
         if wants_json:
@@ -201,6 +380,17 @@ def send_message(request, chat_id):
                 messages.error(request, error)
         return redirect("messenger:chat", chat_id=chat.pk)
 
+    reply_to = None
+    reply_id = form.cleaned_data.get("reply_to")
+    if reply_id:
+        reply_to = chat.messages.filter(pk=reply_id, is_deleted=False).first()
+        if reply_to is None:
+            payload = {"ok": False, "errors": {"reply_to": [{"message": "Сообщение для ответа больше недоступно."}]}}
+            if wants_json:
+                return JsonResponse(payload, status=400)
+            messages.error(request, "Сообщение для ответа больше недоступно.")
+            return redirect("messenger:chat", chat_id=chat.pk)
+
     attachment_mode = form.cleaned_data.get("attachment_mode") or MessageForm.MODE_MEDIA
     send_as_file = attachment_mode == MessageForm.MODE_FILE
 
@@ -209,31 +399,241 @@ def send_message(request, chat_id):
             chat=chat,
             sender=request.user,
             text=form.cleaned_data["text"],
+            reply_to=reply_to,
         )
         for uploaded in form.cleaned_data["attachments"]:
             MessageAttachment.objects.create(
                 message=message,
                 file=uploaded,
-                kind=(
-                    MessageAttachment.Kind.FILE
-                    if send_as_file
-                    else attachment_kind(uploaded)
-                ),
+                kind=MessageAttachment.Kind.FILE if send_as_file else attachment_kind(uploaded),
                 original_name=Path(uploaded.name).name[:255],
                 mime_type=(getattr(uploaded, "content_type", "") or "")[:127],
                 size=uploaded.size,
             )
         touch_chat(chat)
+        ChatParticipant.objects.filter(chat=chat).update(is_archived=False)
+        ChatParticipant.objects.filter(chat=chat, user=request.user).update(
+            draft_text="",
+            draft_updated_at=None,
+            last_typing_at=None,
+        )
         mark_chat_read(chat, request.user, message)
 
-    message = (
-        Message.objects.select_related("sender")
-        .prefetch_related("attachments")
-        .get(pk=message.pk)
-    )
+    message = _base_message_queryset(chat).get(pk=message.pk)
     if wants_json:
-        return JsonResponse({"ok": True, "message": serialize_message(message, request.user)})
+        return JsonResponse({"ok": True, "message": _serialized_message(message, request.user, chat)})
     return redirect("messenger:chat", chat_id=chat.pk)
+
+
+@login_required
+@require_POST
+def edit_message(request, chat_id, message_id):
+    chat = _chat_for_user(request.user, chat_id)
+    message = get_object_or_404(
+        _base_message_queryset(chat),
+        pk=message_id,
+        sender=request.user,
+        is_deleted=False,
+    )
+    form = EditMessageForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors.get_json_data()}, status=400)
+
+    text = form.cleaned_data["text"]
+    if not text and not message.attachments.exists():
+        return JsonResponse(
+            {"ok": False, "errors": {"text": [{"message": "Текстовое сообщение не может быть пустым."}]}},
+            status=400,
+        )
+
+    message.text = text
+    message.edited_at = timezone.now()
+    message.save(update_fields=("text", "edited_at", "updated_at"))
+    message = _base_message_queryset(chat).get(pk=message.pk)
+    return JsonResponse({"ok": True, "message": _serialized_message(message, request.user, chat)})
+
+
+@login_required
+@require_POST
+def delete_message(request, chat_id, message_id):
+    chat = _chat_for_user(request.user, chat_id)
+    message = get_object_or_404(_base_message_queryset(chat), pk=message_id, is_deleted=False)
+    with transaction.atomic():
+        delete_message_content(message)
+    message = _base_message_queryset(chat).get(pk=message.pk)
+    return JsonResponse({"ok": True, "message": _serialized_message(message, request.user, chat)})
+
+
+@login_required
+@require_POST
+def forward_message(request, chat_id, message_id):
+    source_chat = _chat_for_user(request.user, chat_id)
+    source = get_object_or_404(_base_message_queryset(source_chat), pk=message_id, is_deleted=False)
+    raw_target = request.POST.get("target_chat_id", "").strip()
+
+    if raw_target == "saved":
+        target_chat = get_or_create_direct_chat(request.user, request.user)
+    else:
+        try:
+            target_chat_id = int(raw_target)
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Выберите чат для пересылки."}, status=400)
+        target_chat = _chat_for_user(request.user, target_chat_id)
+
+    origin = source.forwarded_from or source
+    origin_name = source.forwarded_from_name or source.sender.display_name
+    origin_username = source.forwarded_from_username or source.sender.username
+
+    with transaction.atomic():
+        forwarded = Message.objects.create(
+            chat=target_chat,
+            sender=request.user,
+            text=source.text,
+            forwarded_from=origin,
+            forwarded_from_name=origin_name,
+            forwarded_from_username=origin_username,
+        )
+        clone_attachments(source, forwarded)
+        touch_chat(target_chat)
+        ChatParticipant.objects.filter(chat=target_chat).update(is_archived=False)
+        mark_chat_read(target_chat, request.user, forwarded)
+
+    forwarded = _base_message_queryset(target_chat).get(pk=forwarded.pk)
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": _serialized_message(forwarded, request.user, target_chat),
+            "target_chat_id": target_chat.pk,
+            "target_url": reverse("messenger:chat", args=[target_chat.pk]),
+        }
+    )
+
+
+@login_required
+@require_POST
+def pin_message(request, chat_id, message_id):
+    chat = _chat_for_user(request.user, chat_id)
+    message = get_object_or_404(chat.messages, pk=message_id, is_deleted=False)
+    pin = PinnedMessage.objects.filter(chat=chat, message=message).first()
+    if pin is None:
+        PinnedMessage.objects.create(chat=chat, message=message, pinned_by=request.user)
+        pinned = True
+    else:
+        pin.delete()
+        pinned = False
+    return JsonResponse({"ok": True, "pinned": pinned, "pins": serialize_pins(chat)})
+
+
+@login_required
+@require_GET
+def search_messages(request, chat_id):
+    chat = _chat_for_user(request.user, chat_id)
+    query = request.GET.get("q", "").strip()[:120]
+    if not query:
+        return JsonResponse({"ok": True, "results": []})
+
+    results = list(
+        _base_message_queryset(chat)
+        .filter(is_deleted=False)
+        .filter(Q(text__icontains=query) | Q(attachments__original_name__icontains=query))
+        .distinct()
+        .order_by("-id")[:50]
+    )
+    return JsonResponse(
+        {
+            "ok": True,
+            "results": [
+                {
+                    "id": message.pk,
+                    "sender_name": message.sender.display_name,
+                    "preview": message.preview[:220],
+                    "time": timezone.localtime(message.created_at).strftime("%d.%m.%Y %H:%M"),
+                    "url": f"{reverse('messenger:chat', args=[chat.pk])}?message={message.pk}#message-{message.pk}",
+                }
+                for message in results
+            ],
+        }
+    )
+
+
+@login_required
+@require_POST
+def chat_action(request, chat_id):
+    chat = _chat_for_user(request.user, chat_id)
+    membership = _membership(chat, request.user)
+    action = request.POST.get("action", "")
+
+    if action == "pin":
+        membership.is_pinned = not membership.is_pinned
+        membership.save(update_fields=("is_pinned",))
+        messages.success(request, "Чат закреплён." if membership.is_pinned else "Чат откреплён.")
+    elif action == "mute":
+        membership.is_muted = not membership.is_muted
+        membership.save(update_fields=("is_muted",))
+        messages.success(request, "Уведомления выключены." if membership.is_muted else "Уведомления включены.")
+    elif action == "archive":
+        membership.is_archived = not membership.is_archived
+        membership.save(update_fields=("is_archived",))
+        messages.success(request, "Чат перенесён в архив." if membership.is_archived else "Чат возвращён из архива.")
+        if membership.is_archived:
+            return redirect(f"{reverse('messenger:home')}?archived=1")
+        return redirect("messenger:home")
+    elif action == "clear":
+        with transaction.atomic():
+            for message in _base_message_queryset(chat).filter(is_deleted=False):
+                delete_message_content(message)
+            PinnedMessage.objects.filter(chat=chat).delete()
+            ChatParticipant.objects.filter(chat=chat).update(
+                last_read_message=None,
+                draft_text="",
+                draft_updated_at=None,
+                last_typing_at=None,
+            )
+        messages.success(request, "История очищена у обоих участников.")
+    else:
+        messages.error(request, "Неизвестное действие с чатом.")
+
+    return redirect("messenger:chat", chat_id=chat.pk)
+
+
+@login_required
+@require_POST
+def save_draft(request, chat_id):
+    chat = _chat_for_user(request.user, chat_id)
+    text = request.POST.get("text", "")
+    if len(text) > 4096:
+        return JsonResponse({"ok": False, "error": "Черновик слишком длинный."}, status=400)
+    ChatParticipant.objects.filter(chat=chat, user=request.user).update(
+        draft_text=text,
+        draft_updated_at=timezone.now() if text else None,
+    )
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def typing(request, chat_id):
+    chat = _chat_for_user(request.user, chat_id)
+    ChatParticipant.objects.filter(chat=chat, user=request.user).update(last_typing_at=timezone.now())
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_GET
+def download_attachment(request, attachment_id):
+    attachment = get_object_or_404(
+        MessageAttachment.objects.select_related("message", "message__chat"),
+        pk=attachment_id,
+        message__chat__participants=request.user,
+        message__is_deleted=False,
+    )
+    attachment.file.open("rb")
+    return FileResponse(
+        attachment.file,
+        as_attachment=True,
+        filename=Path(attachment.original_name).name or "file",
+        content_type="application/octet-stream",
+    )
 
 
 @login_required
@@ -245,18 +645,66 @@ def poll_messages(request, chat_id):
     except (TypeError, ValueError):
         after_id = 0
 
+    now = timezone.now()
+    since = parse_datetime(request.GET.get("since", ""))
+    if since is None:
+        since = now
+    elif timezone.is_naive(since):
+        since = timezone.make_aware(since, timezone.get_current_timezone())
+
+    base = _base_message_queryset(chat)
     new_messages = list(
-        chat.messages.filter(id__gt=after_id)
-        .select_related("sender")
-        .prefetch_related("attachments")
-        .order_by("id")[:100]
+        base.filter(id__gt=after_id, is_deleted=False).order_by("id")[:100]
     )
     if new_messages:
         mark_chat_read(chat, request.user, new_messages[-1])
 
+    updated_messages = list(
+        base.filter(id__lte=after_id, updated_at__gt=since)
+        .order_by("updated_at", "id")[:100]
+    )
+    high_watermark = chat.messages.order_by("-id").values_list("id", flat=True).first() or after_id
+    other_last_read_id = _other_last_read_id(chat, request.user)
+    pinned_ids = set(
+        PinnedMessage.objects.filter(chat=chat, message__is_deleted=False)
+        .values_list("message_id", flat=True)
+    )
+
+    other_membership = _other_membership(chat, request.user)
+    other_typing = bool(
+        other_membership
+        and other_membership.last_typing_at
+        and other_membership.last_typing_at >= now - timedelta(seconds=5)
+    )
+    other_user = other_user_for_chat(chat, request.user)
+    other_status = "Личное облако" if chat.direct_key == f"self:{request.user.pk}" else _presence_text(other_user)
+
     return JsonResponse(
         {
             "ok": True,
-            "messages": [serialize_message(message, request.user) for message in new_messages],
+            "messages": [
+                serialize_message(
+                    message,
+                    request.user,
+                    other_last_read_id=other_last_read_id,
+                    pinned_ids=pinned_ids,
+                )
+                for message in new_messages
+            ],
+            "updates": [
+                serialize_message(
+                    message,
+                    request.user,
+                    other_last_read_id=other_last_read_id,
+                    pinned_ids=pinned_ids,
+                )
+                for message in updated_messages
+            ],
+            "high_watermark": high_watermark,
+            "other_last_read_id": other_last_read_id,
+            "other_typing": other_typing,
+            "other_status": other_status,
+            "pins": serialize_pins(chat),
+            "server_time": now.isoformat(),
         }
     )
