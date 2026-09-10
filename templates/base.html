@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="{% if request.user.is_authenticated and request.user.theme == 'dark' %}#171412{% else %}#801f28{% endif %}">
+  <link rel="icon" type="image/png" href="{% static 'img/stalingram-icon.png' %}">
   <title>{% block title %}Stalingram{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <link rel="stylesheet" href="{% static 'css/brand.css' %}">
