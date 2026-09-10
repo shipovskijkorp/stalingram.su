@@ -1,3 +1,16 @@
+.sidebar {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.chat-folder-tabs {
+  align-self: start;
+}
+
+.chat-folder-tabs a {
+  height: 34px;
+  min-height: 34px;
+}
+
 @media (max-width: 1180px) and (min-width: 821px) {
   .app-shell { grid-template-columns: clamp(285px, 31vw, 340px) minmax(0, 1fr); }
   .sidebar__topbar { min-height: 64px; }
