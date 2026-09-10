@@ -1,2 +1,13 @@
-.vscode/
 .idea/
+.vscode/
+.venv/
+venv/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+var/
+staticfiles/
+.DS_Store
+Thumbs.db

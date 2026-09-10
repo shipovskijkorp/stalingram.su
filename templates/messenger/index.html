@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Stalingram{% endblock %}
+{% block body_class %}app-body{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <header class="sidebar__topbar">
+      <button class="icon-button menu-button" type="button" aria-label="Меню" title="Главное управление связи">
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brand" href="{% url 'messenger:home' %}" aria-label="Stalingram">
+        <span class="brand__mark" aria-hidden="true">★</span>
+        <span class="brand__word">STALINGRAM</span>
+      </a>
+      <button class="icon-button compose-button" type="button" aria-label="Новый чат" title="Создание чатов появится следующим этапом" disabled>✎</button>
+    </header>
+
+    <div class="search-wrap">
+      <label class="search search--disabled">
+        <span aria-hidden="true">⌕</span>
+        <input type="search" placeholder="Поиск по чатам" disabled>
+      </label>
+    </div>
+
+    <section class="chat-list chat-list--empty" aria-label="Чаты">
+      <div class="chat-empty">
+        <span class="chat-empty__icon">☰</span>
+        <strong>Диалогов пока нет</strong>
+        <p>Когда появятся чаты, они будут собраны здесь.</p>
+      </div>
+    </section>
+
+    <footer class="sidebar__footer">
+      <span class="account-mini" title="{{ request.user.email }}">
+        <span class="account-mini__avatar">{{ request.user.username|slice:':1'|upper }}</span>
+        <span class="account-mini__name">{{ request.user.username }}</span>
+      </span>
+      <form method="post" action="{% url 'accounts:logout' %}" class="logout-form">
+        {% csrf_token %}
+        <button type="submit" title="Выйти">Выйти</button>
+      </form>
+      <button id="easterStar" class="footer-star" type="button" title="Одобрено Госпланом">★</button>
+    </footer>
+  </aside>
+
+  <main class="conversation conversation--empty">
+    <div class="wallpaper" aria-hidden="true"></div>
+    <section class="conversation-empty">
+      <span class="conversation-empty__star">★</span>
+      <h1>Stalingram</h1>
+      <p>Выберите диалог, когда здесь появятся ваши чаты.</p>
+      <small>Сообщений нет. Дефицит тоже пока не объявлен.</small>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+{% endblock %}

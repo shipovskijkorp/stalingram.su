@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Вход — Stalingram{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+
+{% block content %}
+<main class="auth-shell">
+  <section class="auth-card">
+    <a class="auth-brand" href="{% url 'accounts:login' %}">
+      <span class="brand__mark">★</span>
+      <span>STALINGRAM</span>
+    </a>
+    <div class="auth-heading">
+      <p class="eyebrow">Линия связи</p>
+      <h1>Вход</h1>
+      <p>Используйте логин или почту и пароль.</p>
+    </div>
+
+    <form method="post" class="auth-form" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="form-alert">{{ form.non_field_errors|striptags }}</div>
+      {% endif %}
+
+      <label class="field">
+        <span>{{ form.username.label }}</span>
+        {{ form.username }}
+        {% for error in form.username.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </label>
+
+      <label class="field">
+        <span>{{ form.password.label }}</span>
+        {{ form.password }}
+        {% for error in form.password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </label>
+
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="primary-button" type="submit">Войти</button>
+    </form>
+
+    <p class="auth-switch">Ещё нет учётной записи? <a href="{% url 'accounts:register' %}">Зарегистрироваться</a></p>
+    <p class="micro-copy">Связь устанавливается без бюрократии. Пока что.</p>
+  </section>
+</main>
+{% endblock %}
