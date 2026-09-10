@@ -7,6 +7,7 @@
   <meta name="theme-color" content="{% if request.user.is_authenticated and request.user.theme == 'dark' %}#171412{% else %}#801f28{% endif %}">
   <title>{% block title %}Stalingram{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/brand.css' %}">
   <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
   <link rel="stylesheet" href="{% static 'css/profile.css' %}">
   {% block extra_head %}{% endblock %}
