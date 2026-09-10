@@ -1,0 +1,175 @@
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+
+from apps.accounts.models import User
+
+from .models import ChatParticipant, Message, MessageAttachment, PinnedMessage
+from .services import get_or_create_direct_chat
+
+
+class ChatFeatureTests(TestCase):
+    password = "Stalingram-test-1945"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_dir = tempfile.TemporaryDirectory()
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_dir.name)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        cls._media_dir.cleanup()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", "alice@example.com", self.password)
+        self.bob = User.objects.create_user("bob", "bob@example.com", self.password)
+        self.charlie = User.objects.create_user("charlie", "charlie@example.com", self.password)
+        self.chat = get_or_create_direct_chat(self.alice, self.bob)
+        self.client.force_login(self.alice)
+
+    def test_saved_messages_chat_is_single_participant_chat(self):
+        response = self.client.get(reverse("messenger:saved_messages"))
+        self.assertEqual(response.status_code, 302)
+        saved = self.alice.messenger_chats.get(direct_key=f"self:{self.alice.pk}")
+        self.assertEqual(saved.participants.count(), 1)
+        self.assertEqual(saved.participants.first(), self.alice)
+
+    def test_message_can_reply_to_message_from_same_chat(self):
+        original = Message.objects.create(chat=self.chat, sender=self.bob, text="Исходное")
+        response = self.client.post(
+            reverse("messenger:send_message", args=[self.chat.pk]),
+            {"text": "Ответ", "reply_to": original.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        reply = Message.objects.exclude(pk=original.pk).get()
+        self.assertEqual(reply.reply_to, original)
+
+    def test_reply_to_foreign_chat_is_rejected(self):
+        other_chat = get_or_create_direct_chat(self.alice, self.charlie)
+        foreign = Message.objects.create(chat=other_chat, sender=self.charlie, text="Не отсюда")
+        response = self.client.post(
+            reverse("messenger:send_message", args=[self.chat.pk]),
+            {"text": "Ответ", "reply_to": foreign.pk},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Message.objects.filter(chat=self.chat).count(), 0)
+
+    def test_sender_can_edit_text_and_caption(self):
+        message = Message.objects.create(chat=self.chat, sender=self.alice, text="Старый текст")
+        response = self.client.post(
+            reverse("messenger:edit_message", args=[self.chat.pk, message.pk]),
+            {"text": "Новый текст"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        message.refresh_from_db()
+        self.assertEqual(message.text, "Новый текст")
+        self.assertIsNotNone(message.edited_at)
+
+    def test_other_user_cannot_edit_message(self):
+        message = Message.objects.create(chat=self.chat, sender=self.bob, text="Чужое")
+        response = self.client.post(
+            reverse("messenger:edit_message", args=[self.chat.pk, message.pk]),
+            {"text": "Подмена"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_either_participant_can_delete_for_everyone(self):
+        message = Message.objects.create(chat=self.chat, sender=self.alice, text="Удалить")
+        self.client.force_login(self.bob)
+        response = self.client.post(
+            reverse("messenger:delete_message", args=[self.chat.pk, message.pk]),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        message.refresh_from_db()
+        self.assertTrue(message.is_deleted)
+        self.assertEqual(message.text, "")
+
+    def test_forward_copies_message_and_attachment(self):
+        source = Message.objects.create(chat=self.chat, sender=self.bob, text="Перешли меня")
+        MessageAttachment.objects.create(
+            message=source,
+            file=SimpleUploadedFile("doc.txt", b"test-content", content_type="text/plain"),
+            kind=MessageAttachment.Kind.FILE,
+            original_name="doc.txt",
+            mime_type="text/plain",
+            size=12,
+        )
+        target = get_or_create_direct_chat(self.alice, self.charlie)
+        response = self.client.post(
+            reverse("messenger:forward_message", args=[self.chat.pk, source.pk]),
+            {"target_chat_id": target.pk},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        forwarded = Message.objects.filter(chat=target).get()
+        self.assertEqual(forwarded.text, source.text)
+        self.assertEqual(forwarded.forwarded_from, source)
+        self.assertEqual(forwarded.forwarded_from_username, "bob")
+        self.assertEqual(forwarded.attachments.count(), 1)
+
+    def test_message_pin_toggles(self):
+        message = Message.objects.create(chat=self.chat, sender=self.bob, text="Закрепить")
+        url = reverse("messenger:pin_message", args=[self.chat.pk, message.pk])
+        self.client.post(url, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertTrue(PinnedMessage.objects.filter(chat=self.chat, message=message).exists())
+        self.client.post(url, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertFalse(PinnedMessage.objects.filter(chat=self.chat, message=message).exists())
+
+    def test_chat_pin_mute_and_archive_are_per_user(self):
+        url = reverse("messenger:chat_action", args=[self.chat.pk])
+        self.client.post(url, {"action": "pin"})
+        self.client.post(url, {"action": "mute"})
+        membership = ChatParticipant.objects.get(chat=self.chat, user=self.alice)
+        self.assertTrue(membership.is_pinned)
+        self.assertTrue(membership.is_muted)
+
+        self.client.post(url, {"action": "archive"})
+        membership.refresh_from_db()
+        self.assertTrue(membership.is_archived)
+        self.assertFalse(ChatParticipant.objects.get(chat=self.chat, user=self.bob).is_archived)
+
+    def test_draft_and_typing_state_are_saved(self):
+        draft_url = reverse("messenger:save_draft", args=[self.chat.pk])
+        typing_url = reverse("messenger:typing", args=[self.chat.pk])
+        self.assertEqual(self.client.post(draft_url, {"text": "Черновик"}).status_code, 200)
+        self.assertEqual(self.client.post(typing_url).status_code, 200)
+        membership = ChatParticipant.objects.get(chat=self.chat, user=self.alice)
+        self.assertEqual(membership.draft_text, "Черновик")
+        self.assertIsNotNone(membership.last_typing_at)
+
+    def test_search_finds_message_text_and_filename(self):
+        text_message = Message.objects.create(chat=self.chat, sender=self.bob, text="секретный план")
+        file_message = Message.objects.create(chat=self.chat, sender=self.alice, text="")
+        MessageAttachment.objects.create(
+            message=file_message,
+            file=SimpleUploadedFile("report.pdf", b"pdf", content_type="application/pdf"),
+            kind=MessageAttachment.Kind.FILE,
+            original_name="report.pdf",
+            mime_type="application/pdf",
+            size=3,
+        )
+        url = reverse("messenger:search_messages", args=[self.chat.pk])
+        by_text = self.client.get(url, {"q": "секретный"}).json()["results"]
+        by_file = self.client.get(url, {"q": "report"}).json()["results"]
+        self.assertEqual(by_text[0]["id"], text_message.pk)
+        self.assertEqual(by_file[0]["id"], file_message.pk)
+
+    def test_gif_upload_is_rejected(self):
+        upload = SimpleUploadedFile("animation.gif", b"GIF89a", content_type="image/gif")
+        response = self.client.post(
+            reverse("messenger:send_message", args=[self.chat.pk]),
+            {"attachment_mode": "file", "attachments": upload},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Message.objects.exists())
