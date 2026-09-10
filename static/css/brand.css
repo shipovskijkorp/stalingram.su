@@ -9,3 +9,15 @@
 .brand__mark::before {
   content: none;
 }
+
+.menu-button {
+  background-image: url("../img/sidebar-menu-button.png") !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  image-rendering: pixelated;
+}
+
+.menu-button > span {
+  display: none !important;
+}
